@@ -1,0 +1,269 @@
+DATA STRUCTURES – STUDENT SUMMARY NOTES
+Key Concepts, Pseudocode, Algorithms and Quick Revision
+Purpose: These notes are designed for quick student revision, classroom learning, laboratory preparation and examination preparation.
+1. Data Structures
+A data structure is a systematic way of organizing and storing data so that it can be accessed and processed efficiently.
+Examples: Array, Linked List, Stack, Queue, Tree and Graph.
+Classification:
+•	Primitive: Integer, Character, Float, Pointer.
+•	Non-Primitive – Linear: Array, Linked List, Stack, Queue.
+•	Non-Primitive – Non-linear: Tree, Graph.
+Importance:
+•	Efficient storage and processing of data.
+•	Faster searching, insertion and deletion.
+•	Better memory utilization.
+•	Makes complex problems easier to solve.
+2. Data Structure Operations
+Common operations are:
+Operation	Meaning
+Traversal	Visit each element
+Insertion	Add a new element
+Deletion	Remove an element
+Searching	Find an element
+Sorting	Arrange elements
+Merging	Combine two data structures
+Pseudocode – Array Traversal:
+TRAVERSE(A, n)
+1. Start
+2. For i = 0 to n-1
+       Print A[i]
+3. Stop
+Time Complexity: O(n)
+3. Pointers
+A pointer is a variable that stores the memory address of another variable.
+int x = 10;
+int *p;
+p = &x;
+Here, &x gives the address of x, p stores the address, and *p gives the value stored at that address.
+Important operators:
+Operator	Meaning
+&	Address-of operator
+*	Dereference operator
+Applications: dynamic memory allocation, arrays, strings, linked lists, trees, structures and passing arguments by reference.
+4. Dynamic Memory Allocation
+Dynamic memory allocation means allocating memory during program execution, generally from the heap.
+Function	Purpose
+malloc()	Allocates memory; contents are uninitialized.
+calloc()	Allocates memory and initializes it to zero.
+realloc()	Changes the size of previously allocated memory.
+free()	Releases dynamically allocated memory.
+int *p;
+p = (int *)malloc(5 * sizeof(int));
+
+p = (int *)calloc(5, sizeof(int));
+
+p = (int *)realloc(p, 10 * sizeof(int));
+
+free(p);
+Pseudocode – Dynamic Array:
+DYNAMIC_ARRAY()
+1. Start
+2. Read n
+3. Allocate memory for n integers
+4. Read n elements
+5. Display/process the elements
+6. Release memory using free()
+7. Stop
+Important: Failure to release dynamically allocated memory can cause a memory leak.
+5. Data Abstraction
+Data abstraction means showing only the essential features of data and hiding unnecessary implementation details.
+Example: In a stack, users work with push(), pop() and peek() without needing to know the internal implementation.
+•	Reduces complexity.
+•	Improves modularity.
+•	Makes programs easier to maintain.
+•	Separates interface from implementation.
+6. Arrays
+An array is a collection of elements of the same data type stored in contiguous memory locations.
+Example: A = [10, 20, 30, 40, 50]
+•	Advantage: direct/random access.
+•	Advantage: simple traversal and implementation.
+•	Limitation: static arrays have fixed size.
+•	Insertion/deletion may require shifting elements.
+7. Dynamically Allocated Arrays
+A dynamic array allows its size to be decided at run time.
+int n;
+int *a;
+scanf("%d", &n);
+a = (int *)malloc(n * sizeof(int));
+DYNAMIC_ARRAY()
+1. Start
+2. Read n
+3. Allocate memory for n elements
+4. For i = 0 to n-1
+       Read A[i]
+5. For i = 0 to n-1
+       Display A[i]
+6. Free allocated memory
+7. Stop
+8. Sparse Matrix
+A sparse matrix is a matrix in which most elements are zero.
+0  0  5
+0  0  0
+2  0  0
+Triplet representation stores only non-zero elements. The first row commonly stores: number of rows, number of columns and number of non-zero elements.
+3  3  2
+0  2  5
+2  0  2
+Pseudocode – Sparse Matrix to Triplet:
+SPARSE_TO_TRIPLET(A, rows, cols)
+1. count = 0
+2. For i = 0 to rows-1
+3.   For j = 0 to cols-1
+4.     If A[i][j] != 0
+5.       count = count + 1
+6. Store rows, cols, count
+7. Scan A again
+8. Store row, column and value for every non-zero element
+9. Stop
+Main benefit: saves memory when the matrix contains many zero values.
+9. Polynomial Representation
+A polynomial can be represented as a collection of terms, where each term contains a coefficient and an exponent.
+Example: 5x³ + 4x² + 2x + 7
+Coefficient	Exponent
+5	3
+4	2
+2	1
+7	0
+struct Term
+{
+    int coefficient;
+    int exponent;
+};
+Polynomial addition logic:
+Compare exponents.
+If exponent1 == exponent2:
+    Add coefficients.
+If exponent1 > exponent2:
+    Copy first term.
+If exponent2 > exponent1:
+    Copy second term.
+Continue until all terms are processed.
+Example: (5x² + 3x + 2) + (4x² + 2x + 5) = 9x² + 5x + 7
+10. String Processing
+A string in C is a sequence of characters terminated by the null character '\0'.
+char str[] = "HELLO";
+Internally: H E L L O \0
+Common string operations:
+Function	Purpose
+strlen()	Find string length
+strcpy()	Copy a string
+strcmp()	Compare strings
+strcat()	Concatenate strings
+strstr()	Search for a substring
+11. Naive Pattern Searching
+Naive pattern searching compares the pattern with the text at every possible starting position.
+Example: Text = ABABCABAB, Pattern = ABAB.
+NAIVE_SEARCH(T, P)
+1. n = length(T)
+2. m = length(P)
+3. For i = 0 to n-m
+4.     j = 0
+5.     While j < m AND T[i+j] == P[j]
+6.         j = j + 1
+7.     If j == m
+8.         Print "Pattern found at", i
+9. Stop
+Worst-case time complexity: O(n × m).
+12. KMP Algorithm
+KMP (Knuth-Morris-Pratt) improves pattern searching by using an LPS array.
+LPS = Longest Proper Prefix which is also a Suffix.
+For Pattern = ABAB, LPS = [0, 0, 1, 2].
+KMP_SEARCH(T, P)
+1. Construct LPS array for P
+2. i = 0, j = 0
+3. While i < length(T)
+4.     If T[i] == P[j]
+5.         i = i + 1
+6.         j = j + 1
+7.     If j == length(P)
+8.         Pattern found at i-j
+9.         j = LPS[j-1]
+10.    Else if T[i] != P[j]
+11.        If j != 0
+12.            j = LPS[j-1]
+13.        Else
+14.            i = i + 1
+15. Stop
+Complexity: O(n + m). KMP avoids repeated comparisons by using information already obtained from the pattern.
+13. Insertion Sort
+Insertion Sort builds the sorted array one element at a time by inserting each new element into its correct position.
+INSERTION_SORT(A, n)
+1. For i = 1 to n-1
+2.     key = A[i]
+3.     j = i - 1
+4.     While j >= 0 AND A[j] > key
+5.         A[j+1] = A[j]
+6.         j = j - 1
+7.     A[j+1] = key
+8. Stop
+Case	Time Complexity
+Best	O(n)
+Average	O(n²)
+Worst	O(n²)
+Characteristics: simple, stable, in-place, and useful for small or nearly sorted data.
+14. Radix Sort
+Radix Sort is a non-comparison sorting algorithm that sorts numbers digit by digit.
+Typical order: units digit → tens digit → hundreds digit → and so on.
+RADIX_SORT(A, n)
+1. Find maximum element
+2. exp = 1
+3. While maximum / exp > 0
+4.     Perform stable counting sort according to:
+       digit = (A[i] / exp) % 10
+5.     exp = exp * 10
+6. Stop
+Time complexity: O(d × (n + k)), where d is the number of digits, n is the number of elements and k is the digit range (normally 10).
+15. SLT – String Operations
+Students should practice the following string operations:
+•	Find length of a string.
+•	Copy one string into another.
+•	Compare two strings.
+•	Concatenate two strings.
+•	Search for a substring.
+•	Reverse a string.
+•	Read and display strings safely using suitable C input methods.
+16. Quick Revision Table
+Topic	Main Idea	Important Point
+Data Structure	Organizes data efficiently	Supports efficient processing
+Pointer	Stores an address	Use & and *
+Dynamic Memory	Runtime memory allocation	malloc, calloc, realloc, free
+Data Abstraction	Hides implementation details	Focus on essential operations
+Array	Same-type elements	Contiguous memory
+Sparse Matrix	Stores mostly non-zero information	Triplet representation saves memory
+Polynomial	Coefficient + exponent terms	Can use array/linked representation
+Naive Search	Checks each possible position	O(nm) worst case
+KMP	Uses LPS	O(n+m)
+Insertion Sort	Inserts into sorted portion	Stable; O(n²) worst case
+Radix Sort	Sorts digit by digit	Non-comparison sorting
+String Operations	Processes character sequences	strlen, strcpy, strcmp, strcat, strstr
+17. Important Questions for Practice
+1.	Define data structure and classify data structures with examples.
+2.	List and describe the basic operations on data structures.
+3.	Define a pointer and explain pointer declaration and dereferencing with an example.
+4.	Explain malloc(), calloc(), realloc() and free() with suitable examples.
+5.	Explain data abstraction with a real-life example.
+6.	Explain dynamically allocated arrays and write pseudocode for their implementation.
+7.	Define a sparse matrix and explain triplet representation.
+8.	Explain polynomial representation and the basic logic for polynomial addition.
+9.	Explain common string operations in C.
+10.	Write the pseudocode for Naive Pattern Searching.
+11.	Explain the LPS array used in KMP with an example.
+12.	Write the pseudocode for KMP pattern searching and state its complexity.
+13.	Write the pseudocode for Insertion Sort and discuss its time complexity.
+14.	Explain Radix Sort with an example and give its complexity.
+15.	Compare Naive Pattern Searching and KMP.
+16.	Compare Insertion Sort and Radix Sort.
+18. One-Line Revision
+•	Data Structure → Organizes data efficiently.
+•	Operation → Process performed on data such as insertion, deletion and searching.
+•	Pointer → Stores the address of another variable.
+•	Dynamic Memory → Memory allocated during runtime.
+•	Data Abstraction → Hides implementation details and exposes essential operations.
+•	Array → Collection of same-type elements stored contiguously.
+•	Sparse Matrix → Matrix containing mostly zero elements.
+•	Polynomial → Collection of coefficient-exponent terms.
+•	Naive Search → Checks the pattern at every possible position.
+•	KMP → Uses LPS to avoid unnecessary comparisons.
+•	Insertion Sort → Inserts each element into its correct position.
+•	Radix Sort → Sorts numbers digit by digit.
+•	String Operations → Length, copy, compare, concatenate, search and related operations.
