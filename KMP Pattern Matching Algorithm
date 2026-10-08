@@ -1,0 +1,220 @@
+KMP Pattern Matching Algorithm
+1. Why KMP is Needed
+KMP stands for Knuth–Morris–Pratt. It is an efficient string pattern-matching algorithm used to find occurrences of a pattern PAT inside a main string STR.
+The main advantage of KMP is that it does not recheck characters that have already been matched.
+Example:
+TEXT = ABCABCD
+PATTERN = ABCD
+A naive algorithm may repeatedly compare characters from the beginning of the pattern after a mismatch. KMP avoids this unnecessary comparison by preprocessing the pattern and constructing an array called LPS.
+2. LPS
+LPS = Longest Proper Prefix which is also a Suffix.
+For every position in the pattern, lps[i] stores the length of the longest proper prefix of PAT[0...i] that is also a suffix.
+Example:
+PAT = A B A B C
+      0 1 2 3 4
+Index	Pattern prefix	LPS
+0	A	0
+1	AB	0
+2	ABA	1
+3	ABAB	2
+4	ABABC	0
+Therefore:
+LPS = 0 0 1 2 0
+Why lps[3] = 2? For ABAB, the prefix AB and suffix AB are equal. Therefore lps[3] = 2.
+3. Important Idea of KMP
+Suppose PAT = A B A B C and while matching, we reach A B A B and then encounter a mismatch. Instead of starting again from PAT[0], KMP uses lps[j-1] to determine where to continue.
+For example, if j = 4, then lps[j-1] = lps[3] = 2, so j becomes 2. The already matched AB information is reused.
+This is the main idea behind KMP.
+4. KMP Algorithm
+Step 1: Read the strings — Read TEXT and PAT.
+Step 2: Find lengths — n = length(TEXT), m = length(PAT).
+Step 3: Construct LPS array — computeLPS(PAT, m, lps).
+Step 4: Initialize — i = 0 and j = 0, where i is the index of TEXT and j is the index of PAT.
+Step 5: Compare — If TEXT[i] == PAT[j], increment i and j. If j == m, the pattern is found.
+Step 6: On mismatch — If TEXT[i] != PAT[j] and j != 0, set j = lps[j-1]. Notice that i is not incremented. If j == 0, increment i.
+5. C Program for KMP
+#include <stdio.h>
+
+/* Function to find string length */
+int stringLength(char str[])
+{
+    int i = 0;
+
+    while (str[i] != '\0')
+    {
+        i++;
+    }
+
+    return i;
+}
+
+/* Function to construct LPS array */
+void computeLPS(char pattern[], int m, int lps[])
+{
+    int len = 0;
+    int i = 1;
+
+    lps[0] = 0;
+
+    while (i < m)
+    {
+        if (pattern[i] == pattern[len])
+        {
+            len++;
+            lps[i] = len;
+            i++;
+        }
+        else
+        {
+            if (len != 0)
+            {
+                len = lps[len - 1];
+            }
+            else
+            {
+                lps[i] = 0;
+                i++;
+            }
+        }
+    }
+}
+
+/* KMP Pattern Matching */
+int KMP(char text[], char pattern[])
+{
+    int n = stringLength(text);
+    int m = stringLength(pattern);
+
+    int lps[100];
+
+    int i = 0;
+    int j = 0;
+
+    computeLPS(pattern, m, lps);
+
+    printf("\nLPS Array: ");
+
+    for (i = 0; i < m; i++)
+    {
+        printf("%d ", lps[i]);
+    }
+
+    printf("\n");
+
+    i = 0;
+    j = 0;
+
+    while (i < n)
+    {
+        if (text[i] == pattern[j])
+        {
+            i++;
+            j++;
+        }
+
+        if (j == m)
+        {
+            return i - j;
+        }
+        else if (i < n && text[i] != pattern[j])
+        {
+            if (j != 0)
+            {
+                j = lps[j - 1];
+            }
+            else
+            {
+                i++;
+            }
+        }
+    }
+
+    return -1;
+}
+
+int main()
+{
+    char text[200];
+    char pattern[100];
+
+    printf("Enter Main String: ");
+    scanf(" %[^\n]", text);
+
+    printf("Enter Pattern String: ");
+    scanf(" %[^\n]", pattern);
+
+    int position = KMP(text, pattern);
+
+    if (position != -1)
+    {
+        printf("Pattern found at position %d\n", position);
+    }
+    else
+    {
+        printf("Pattern does not exist in the main string.\n");
+    }
+
+    return 0;
+}
+6. Complete Tracing Example
+Consider:
+TEXT = "ABABDABACDABABCABAB"
+PAT = "ABABCABAB"
+Step 1: Calculate LPS
+Pattern:
+A B A B C A B A B
+0 1 2 3 4 5 6 7 8
+LPS:
+0 0 1 2 0 1 2 3 4
+So:
+lps = [0, 0, 1, 2, 0, 1, 2, 3, 4]
+7. KMP Matching Trace
+Initially: i = 0, j = 0
+TEXT[0] = A and PAT[0] = A → Match → i = 1, j = 1
+TEXT[1] = B and PAT[1] = B → Match → i = 2, j = 2
+TEXT[2] = A and PAT[2] = A → Match → i = 3, j = 3
+TEXT[3] = B and PAT[3] = B → Match → i = 4, j = 4
+Now TEXT[4] = D and PAT[4] = C → Mismatch.
+Instead of setting j = 0, KMP performs j = lps[j - 1]. Therefore j = lps[3] = 2. i remains 4.
+Now TEXT[4] = D and PAT[2] = A → Mismatch again. Since j = 2, use j = lps[1] = 0.
+Now TEXT[4] = D and PAT[0] = A → Mismatch and j = 0, so i is incremented to 5.
+The algorithm continues and eventually finds the pattern ABABCABAB at starting position 10.
+Output:
+Pattern found at position 10
+8. Most Important Difference: Naive vs KMP
+Naive Pattern Matching	KMP Pattern Matching
+On mismatch, comparison restarts from the beginning of PAT.	On mismatch, j = lps[j-1] is used.
+Previously matched information is not reused.	Previously matched information is reused.
+Worst-case searching time: O(nm).	Searching time: O(n).
+No LPS array is required.	LPS array is required.
+9. KMP Trace Formula to Remember
+Case 1 – Characters match:
+if (text[i] == pattern[j])
+{
+    i++;
+    j++;
+}
+Case 2 – Complete pattern matched:
+if (j == m)
+{
+    Pattern Found;
+}
+Case 3 – Mismatch:
+if (j != 0)
+{
+    j = lps[j - 1];
+}
+else
+{
+    i++;
+}
+The key statement in KMP is: j = lps[j - 1]; This is what makes it different from the Naive/Brute Force algorithm.
+10. Complexity
+Algorithm	Preprocessing	Searching	Overall
+Naive	—	O(nm) worst case	O(nm)
+KMP	O(m)	O(n)	O(n + m)
+Where:
+n = length of text
+m = length of pattern
+Thus, KMP has linear-time pattern matching.
+One-line exam definition: KMP is a string pattern-matching algorithm that uses the LPS (Longest Proper Prefix which is also Suffix) array to avoid redundant comparisons and searches for a pattern in O(n + m) time.
