@@ -1,0 +1,432 @@
+
+
+1.Design, develop and implement a program in C for the following operations on Strings:
+a.	Read a main String (STR), a Pattern String (PAT) and a replace string (REP)
+b.	Perform Pattern Matching Operation: Find and Replace all occurrences of PAT in STR with REP if PAT exists in STR. Report suitable messages in case PAT does not exist in STR.
+c.	Pattern Matching Algorithm: Brute Force / KMP
+d.	Support the program with functions for each of the above operations. Do not use built-in functions.
+e.	Check the following test cases.
+Test Case 1: STR = “VVCE MYSURU”, PAT=” MYSURU”, REP=” KARNATAKA”, OUTPUT=” VVCE KARNATAKA”
+Test Case 2: STR = “COMPUTER SCIENCE”, PAT=” COMPUTER”, REP=” BASIC”, OUTPUT=” BASIC SCIENCE”
+
+Algorithm
+START
+Read STR, PAT and REP
+Find the lengths of STR, PAT and REP
+Set i = 0, found = 0
+WHILE i < length(STR)
+    If enough characters remain for PAT:
+        Set j = 0
+        Compare STR[i+j] with PAT[j] while they match
+        If j == length(PAT):
+            Copy REP to result
+            Move i by length(PAT)
+            Set found = 1
+            Continue
+    Copy STR[i] to result
+    Increment i
+END WHILE
+Terminate result with '\0'
+If found == 0, report that PAT does not exist
+Else display result
+STOP
+
+C Program
+#include <stdio.h>
+
+/* Function to find the length of a string */
+int stringLength(char str[])
+{
+    int i = 0;
+
+    while (str[i] != '\0')
+    {
+        i++;
+    }
+
+    return i;
+}
+
+/* Brute Force Pattern Matching and Replace */
+void findAndReplace(char str[], char pat[], char rep[])
+{
+    char result[200];
+
+    int n = stringLength(str);
+    int m = stringLength(pat);
+    int r = stringLength(rep);
+
+    int i = 0;
+    int j;
+    int k = 0;
+    int found = 0;
+
+    while (i < n)
+    {
+        if (i <= n - m)
+        {
+            j = 0;
+
+            /* Compare PAT with STR */
+            while (j < m && str[i + j] == pat[j])
+            {
+                j++;
+            }
+
+            /* Pattern completely matched */
+            if (j == m)
+            {
+                found = 1;
+
+                /* Copy REP into result */
+                for (j = 0; j < r; j++)
+                {
+                    result[k++] = rep[j];
+                }
+
+                /* Skip matched PAT */
+                i = i + m;
+                continue;
+            }
+        }
+
+        /* No match at current position */
+        result[k++] = str[i];
+        i++;
+    }
+
+    result[k] = '\0';
+
+    if (found == 1)
+    {
+        printf("\nPattern found and replaced successfully.\n");
+        printf("Result = %s\n", result);
+    }
+    else
+    {
+        printf("\nPattern does not exist in the main string.\n");
+    }
+}
+
+int main()
+{
+    char STR[200];
+    char PAT[100];
+    char REP[100];
+
+    printf("Enter Main String (STR): ");
+    scanf(" %[^\n]", STR);
+
+    printf("Enter Pattern String (PAT): ");
+    scanf(" %[^\n]", PAT);
+
+    printf("Enter Replacement String (REP): ");
+    scanf(" %[^\n]", REP);
+
+    findAndReplace(STR, PAT, REP);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+9.Develop a Menu driven program in C to demonstrate the following string functions:
+a) strlen
+b) strcmp
+c) strcat
+d) strrev
+Do not use built-in string functions. Write individual user defined functions and demonstrate each function with user input.
+
+
+
+#include <stdio.h>
+
+/* Function to calculate string length */
+int my_strlen(char str[])
+{
+    int i = 0;
+
+    while (str[i] != '\0')
+    {
+        i++;
+    }
+
+    return i;
+}
+
+/* Function to compare two strings */
+int my_strcmp(char str1[], char str2[])
+{
+    int i = 0;
+
+    while (str1[i] != '\0' && str2[i] != '\0')
+    {
+        if (str1[i] != str2[i])
+        {
+            return str1[i] - str2[i];
+        }
+
+        i++;
+    }
+
+    return str1[i] - str2[i];
+}
+
+/* Function to concatenate two strings */
+void my_strcat(char str1[], char str2[])
+{
+    int i = 0;
+    int j = 0;
+
+    /* Find the end of str1 */
+    while (str1[i] != '\0')
+    {
+        i++;
+    }
+
+    /* Copy str2 to the end of str1 */
+    while (str2[j] != '\0')
+    {
+        str1[i] = str2[j];
+        i++;
+        j++;
+    }
+
+    str1[i] = '\0';
+}
+
+/* Function to reverse a string */
+void my_strrev(char str[])
+{
+    int start = 0;
+    int end;
+    char temp;
+
+    end = my_strlen(str) - 1;
+
+    while (start < end)
+    {
+        temp = str[start];
+        str[start] = str[end];
+        str[end] = temp;
+
+        start++;
+        end--;
+    }
+}
+
+int main()
+{
+    int choice;
+    int length;
+    int result;
+
+    char str1[100];
+    char str2[100];
+
+    do
+    {
+        printf("\n==============================");
+        printf("\n       STRING OPERATIONS");
+        printf("\n==============================");
+
+        printf("\n1. String Length");
+        printf("\n2. String Compare");
+        printf("\n3. String Concatenate");
+        printf("\n4. String Reverse");
+        printf("\n5. Exit");
+
+        printf("\n\nEnter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice)
+        {
+            case 1:
+                printf("\nEnter a string: ");
+                scanf(" %[^\n]", str1);
+
+                length = my_strlen(str1);
+
+                printf("Length of string = %d\n", length);
+                break;
+
+            case 2:
+                printf("\nEnter first string: ");
+                scanf(" %[^\n]", str1);
+
+                printf("Enter second string: ");
+                scanf(" %[^\n]", str2);
+
+                result = my_strcmp(str1, str2);
+
+                if (result == 0)
+                    printf("Both strings are equal.\n");
+                else if (result < 0)
+                    printf("First string is smaller than second string.\n");
+                else
+                    printf("First string is greater than second string.\n");
+
+                break;
+
+            case 3:
+                printf("\nEnter first string: ");
+                scanf(" %[^\n]", str1);
+
+                printf("Enter second string: ");
+                scanf(" %[^\n]", str2);
+
+                my_strcat(str1, str2);
+
+                printf("After concatenation = %s\n", str1);
+                break;
+
+            case 4:
+                printf("\nEnter a string: ");
+                scanf(" %[^\n]", str1);
+
+                my_strrev(str1);
+
+                printf("Reversed string = %s\n", str1);
+                break;
+
+            case 5:
+                printf("\nProgram terminated.\n");
+                break;
+
+            default:
+                printf("\nInvalid choice. Please try again.\n");
+        }
+
+    } while (choice != 5);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+Design, develop and implement a program in C for the following operations on expression.
+a. Read infix expression String (INFIX)
+b. Convert the infix expression (INFIX) to a postfix expression using stacks.
+Check the following test cases.
+Test Case 1: Infix = “(1+ (2-3) *4)”, Postfix=”123-4*+”, Result = -3
+Test Case 2: Infix = “4/2-2+3*3-4*2”, Postfix=”42/233*42*-+-”,Result = -1
+Note: Program should support for both parenthesized and free parenthesized expressions with the operators: +, -, *, /, % (Remainder), ^ (Power) and alphanumeric operands.
+#include <stdio.h>
+#include <ctype.h>
+#include <math.h>
+char stack[50];
+int top = -1;
+void push(char ch)
+{
+    top++;
+    stack[top] = ch;
+}
+
+char pop()
+{
+    char ch = stack[top];
+    top--;
+    return ch;
+}
+int priority(char ch)
+{
+    if (ch == '+' || ch == '-')
+        return 1;
+
+    if (ch == '*' || ch == '/' || ch == '%')
+        return 2;
+    if (ch == '^')
+        return 3;
+    return 0;
+}
+
+int main()
+{
+    char infix[50], postfix[50];
+    int i, j = 0;
+    char ch;
+    printf("Enter infix expression: ");
+    scanf("%s", infix);
+    for (i = 0; infix[i] != '\0'; i++)
+    {
+        ch = infix[i];
+        /* Operand */
+        if (isalnum(ch))
+        {
+            postfix[j] = ch;
+            j++;
+        }
+        /* Left parenthesis */
+        else if (ch == '(')
+        {
+            push(ch);
+        }
+        /* Right parenthesis */
+        else if (ch == ')')
+        {
+            while (top != -1 && stack[top] != '(')
+            {
+                postfix[j] = pop();
+                j++;
+            }
+            pop();   // Remove '('
+        }
+        /* Operator */
+else
+        {
+            while (top != -1 &&
+                   stack[top] != '(' &&
+                   priority(stack[top]) >= priority(ch))
+            {
+                postfix[j] = pop();
+                j++;
+            }
+            push(ch);
+        }
+    }
+
+
+
+
+
+    /* Pop remaining operators */
+    while (top != -1)
+    {
+        postfix[j] = pop();
+        j++;
+    }
+    postfix[j] = '\0';
+    printf("Postfix expression = %s\n", postfix);
+    return 0;
+}
