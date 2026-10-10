@@ -1,0 +1,173 @@
+
+3. Design, Develop and Implement a Program in C for the following operations on expression.
+a.	Convert the infix expression (INFIX) to a postfix expression using stacks.
+b.	Evaluate the postfix expression using stacks.
+Check the following test cases. 
+Note: Program should support for both parenthesized and free parenthesized expressions with the operators: +, -, *, /, % (Remainder), ^ (Power) and alphanumeric operands.
+   Test Case 1: Infix = “(1+ (2-3) *4)”, Postfix=”123-4*+”, Result = -3
+   Test Case 2: Infix = “4/2-2+3*3-4*2”, Postfix=”42/233*42*-+-”,               Result = -1
+/* Evaluation of Postfix (Suffix) Expression */
+
+#include <stdio.h>
+#include <ctype.h>
+#include <math.h>
+
+float stack[50];
+int top = -1;
+
+// Perform operation based on operator type
+float operation(char op, float op1, float op2) {
+    switch(op) {
+        case '+': return (op1 + op2);
+        case '-': return (op1 - op2);
+        case '*': return (op1 * op2);
+        case '/': return (op1 / op2);
+        case '^': return pow(op1, op2);
+        case '%': return ((int)op1 % (int)op2);
+        default: return 0;
+    }
+}
+
+// Push value to stack
+void push(float value) {
+    stack[++top] = value;
+}
+
+// Pop value from stack
+float pop() {
+    return stack[top--];
+}
+
+// ------------------- MAIN FUNCTION -------------------
+int main(void) {
+    char postfix[50], symbol;
+    float op1, op2, res;
+    int i;
+
+    printf("Enter the Postfix Expression: ");
+    scanf("%s", postfix);
+
+    for (i = 0; postfix[i] != '\0'; i++) {
+        symbol = postfix[i];
+
+        if (isdigit(symbol)) {
+            push(symbol - '0');  // Convert char to int
+        } else {
+            op2 = pop();
+            op1 = pop();
+            res = operation(symbol, op1, op2);
+            push(res);
+        }
+    }
+
+    res = pop();
+    printf("Result = %.2f\n", res);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Infix to Postfix Conversion using Operator Precedence Functions */
+
+#include <stdio.h>
+#include <string.h>
+
+// Function F() – In-stack precedence
+int F(char symbol) {
+    switch(symbol) {
+        case '+': 
+        case '-': return 2;
+        case '*': 
+        case '/': return 4;
+        case '^': 
+        case '$': return 5;
+        case '(': return 0;
+        case '#': return -1;
+        default:  return 8;   // Operand
+    }
+}
+
+// Function G() – Incoming precedence
+int G(char symbol) {
+    switch(symbol) {
+        case '+': 
+        case '-': return 1;
+        case '*': 
+        case '/': return 3;
+        case '^': 
+        case '$': return 6;
+        case '(': return 9;
+        case ')': return 0;
+        default:  return 7;   // Operand
+    }
+}
+
+// Function to convert Infix → Postfix
+void infix_postfix(char infix[], char postfix[]) {
+    char stack[50];
+    int top = -1, j = 0;
+    char symbol;
+
+    stack[++top] = '#';
+
+    for (int i = 0; i < strlen(infix); i++) {
+        symbol = infix[i];
+
+        while (F(stack[top]) > G(symbol)) {
+            postfix[j++] = stack[top--];
+        }
+
+        if (F(stack[top]) != G(symbol)) {
+            stack[++top] = symbol;
+        } else {
+            top--; // Pop matching '('
+        }
+    }
+
+    while (stack[top] != '#') {
+        postfix[j++] = stack[top--];
+    }
+
+    postfix[j] = '\0';
+}
+
+// ------------------- MAIN -------------------
+int main(void) {
+    char infix[50], postfix[50];
+
+    printf("Enter a valid infix expression: ");
+    fgets(infix, sizeof(infix), stdin);
+
+    // Remove newline from fgets if present
+    infix[strcspn(infix, "\n")] = '\0';
+
+    infix_postfix(infix, postfix);
+
+    printf("\nInfix Expression:   %s", infix);
+    printf("\nPostfix Expression: %s\n", postfix);
+
+    return 0;
+}
