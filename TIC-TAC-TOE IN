@@ -1,0 +1,205 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+#define BOARD_SIZE 3
+
+void print_menu(void);
+void print_board(const char board[BOARD_SIZE][BOARD_SIZE]);
+int check_winner(const char board[BOARD_SIZE][BOARD_SIZE]);
+int board_is_full(const char board[BOARD_SIZE][BOARD_SIZE]);
+void clear_input(void);
+int get_move(const char board[BOARD_SIZE][BOARD_SIZE], int player);
+void play_game(int *player_x_wins, int *player_o_wins, int *draws);
+
+int main(void) {
+    int player_x_wins = 0;
+    int player_o_wins = 0;
+    int draws = 0;
+    int choice;
+
+    printf("=================================\n");
+    printf("       TIC-TAC-TOE IN C\n");
+    printf("=================================\n");
+
+    while (1) {
+        print_menu();
+
+        if (scanf("%d", &choice) != 1) {
+            printf("Please enter a number from the menu.\n");
+            clear_input();
+            continue;
+        }
+
+        switch (choice) {
+            case 1:
+                play_game(&player_x_wins, &player_o_wins, &draws);
+                break;
+            case 2:
+                printf("\nScoreboard\n");
+                printf("Player X wins: %d\n", player_x_wins);
+                printf("Player O wins: %d\n", player_o_wins);
+                printf("Draws:         %d\n\n", draws);
+                break;
+            case 3:
+                printf("Thanks for playing!\n");
+                return 0;
+            default:
+                printf("Choose 1, 2, or 3.\n");
+        }
+    }
+}
+
+void print_menu(void) {
+    printf("\n----------- MENU -----------\n");
+    printf("1. Play a new game\n");
+    printf("2. View scoreboard\n");
+    printf("3. Quit\n");
+    printf("Choose an option: ");
+}
+
+void print_board(const char board[BOARD_SIZE][BOARD_SIZE]) {
+    int row, col;
+
+    printf("\n");
+    for (row = 0; row < BOARD_SIZE; row++) {
+        printf(" ");
+        for (col = 0; col < BOARD_SIZE; col++) {
+            printf(" %c ", board[row][col]);
+            if (col < BOARD_SIZE - 1) {
+                printf("|");
+            }
+        }
+        printf("\n");
+
+        if (row < BOARD_SIZE - 1) {
+            printf(" ---+---+---\n");
+        }
+    }
+    printf("\n");
+}
+
+int check_winner(const char board[BOARD_SIZE][BOARD_SIZE]) {
+    int i;
+
+    /* Check every row and column. */
+    for (i = 0; i < BOARD_SIZE; i++) {
+        if (board[i][0] == board[i][1] &&
+            board[i][1] == board[i][2]) {
+            return board[i][0] == 'X' ? 1 : 2;
+        }
+
+        if (board[0][i] == board[1][i] &&
+            board[1][i] == board[2][i]) {
+            return board[0][i] == 'X' ? 1 : 2;
+        }
+    }
+
+    /* Check both diagonals. */
+    if (board[0][0] == board[1][1] &&
+        board[1][1] == board[2][2]) {
+        return board[0][0] == 'X' ? 1 : 2;
+    }
+
+    if (board[0][2] == board[1][1] &&
+        board[1][1] == board[2][0]) {
+        return board[0][2] == 'X' ? 1 : 2;
+    }
+
+    return 0;
+}
+
+int board_is_full(const char board[BOARD_SIZE][BOARD_SIZE]) {
+    int row, col;
+
+    for (row = 0; row < BOARD_SIZE; row++) {
+        for (col = 0; col < BOARD_SIZE; col++) {
+            if (board[row][col] != 'X' && board[row][col] != 'O') {
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
+void clear_input(void) {
+    int character;
+
+    while ((character = getchar()) != '\n' && character != EOF) {
+        /* Discard the rest of the input line. */
+    }
+}
+
+int get_move(const char board[BOARD_SIZE][BOARD_SIZE], int player) {
+    int position;
+    int row, col;
+    char symbol = player == 1 ? 'X' : 'O';
+
+    while (1) {
+        printf("Player %c, choose a position (1-9): ", symbol);
+
+        if (scanf("%d", &position) != 1) {
+            printf("Please enter a number.\n");
+            clear_input();
+            continue;
+        }
+
+        if (position < 1 || position > 9) {
+            printf("Position must be between 1 and 9.\n");
+            continue;
+        }
+
+        row = (position - 1) / BOARD_SIZE;
+        col = (position - 1) % BOARD_SIZE;
+
+        if (board[row][col] == 'X' || board[row][col] == 'O') {
+            printf("That position is already taken.\n");
+            continue;
+        }
+
+        return position;
+    }
+}
+
+void play_game(int *player_x_wins, int *player_o_wins, int *draws) {
+    char board[BOARD_SIZE][BOARD_SIZE] = {
+        {'1', '2', '3'},
+        {'4', '5', '6'},
+        {'7', '8', '9'}
+    };
+
+    int current_player = 1;
+    int winner = 0;
+    int position;
+    int row, col;
+
+    printf("\nStarting a new game!\n");
+    printf("Choose positions using the numbers shown on the board.\n");
+
+    while (!winner && !board_is_full(board)) {
+        print_board(board);
+        position = get_move(board, current_player);
+
+        row = (position - 1) / BOARD_SIZE;
+        col = (position - 1) % BOARD_SIZE;
+        board[row][col] = current_player == 1 ? 'X' : 'O';
+
+        winner = check_winner(board);
+        if (!winner) {
+            current_player = current_player == 1 ? 2 : 1;
+        }
+    }
+
+    print_board(board);
+
+    if (winner == 1) {
+        printf("Player X wins!\n");
+        (*player_x_wins)++;
+    } else if (winner == 2) {
+        printf("Player O wins!\n");
+        (*player_o_wins)++;
+    } else {
+        printf("It's a draw!\n");
+        (*draws)++;
+    }
+}
