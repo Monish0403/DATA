@@ -1,0 +1,121 @@
+## Game theory
+
+This program implements **Tic-Tac-Toe**, a two-player game played on a 3×3 board.
+
+- Player **X** and Player **O** take turns choosing a square.
+- The squares are numbered 1 to 9, from left to right and top to bottom.
+- The first player to get three matching symbols in a row, column, or diagonal wins.
+- If every square is filled and nobody has won, the game is a draw.
+
+The program uses an **array** to represent the board, **functions** to divide the work into smaller parts, and **loops and conditionals** to control the game.
+
+## How the board is stored
+
+The board is a two-dimensional character array:
+
+```c
+char board[BOARD_SIZE][BOARD_SIZE];
+```
+
+`BOARD_SIZE` is defined as `3`, so the array has three rows and three columns. Each cell stores a character: initially a number from `'1'` to `'9'`, then either `'X'` or `'O'` when a player chooses it.
+
+For example:
+
+```c
+char board[3][3] = {
+    {'1', '2', '3'},
+    {'4', '5', '6'},
+    {'7', '8', '9'}
+};
+```
+
+The board is printed using those numbers as prompts, so players can choose a position.
+
+## What each function does
+
+### `main`
+
+`main` is where the program starts. It initializes the score counters, displays the menu, and repeatedly asks the player what to do.
+
+- Option 1 starts a game.
+- Option 2 displays the scores.
+- Option 3 exits.
+- Any other choice shows an error message.
+
+The `switch` statement selects which action to perform.
+
+### `print_menu`
+
+Displays the menu options. It keeps menu display separate from the program’s main logic.
+
+### `print_board`
+
+Prints the board as a 3×3 grid. Nested `for` loops visit each row and column. The `if` statements print separators between cells and rows.
+
+### `check_winner`
+
+Checks whether either player has won.
+
+It examines:
+
+- Each of the three rows
+- Each of the three columns
+- The diagonal from top-left to bottom-right
+- The diagonal from top-right to bottom-left
+
+For example, this checks one row:
+
+```c
+if (board[i][0] == board[i][1] &&
+    board[i][1] == board[i][2])
+```
+
+If the three cells match, the function returns `1` for X or `2` for O. If no winning line is found, it returns `0`.
+
+The board starts with different numbers in every cell, so three unused squares cannot accidentally count as a win.
+
+### `board_is_full`
+
+Checks every cell. If it finds a cell that is not `X` or `O`, the board is not full and the function returns `0`. If every cell contains a player’s symbol, it returns `1`.
+
+### `clear_input`
+
+When a player types something that is not a valid number, `scanf` cannot read it as an integer. This function discards the rest of that input line so it does not cause the same error repeatedly.
+
+### `get_move`
+
+Prompts the current player to choose a position. It keeps asking until the player enters a valid, unoccupied position.
+
+The position is converted to a row and column like this:
+
+```c
+row = (position - 1) / BOARD_SIZE;
+col = (position - 1) % BOARD_SIZE;
+```
+
+Integer division and the remainder operator map positions 1–9 to array indexes 0–2. For example, position 5 becomes row 1, column 1—the center square.
+
+### `play_game`
+
+Runs one complete game. It creates a fresh board, starts with X, and repeats these steps:
+
+1. Print the board.
+2. Get a valid move.
+3. Put the player’s symbol in that cell.
+4. Check for a winner.
+5. If there is no winner, switch to the other player.
+
+The loop ends when someone wins or the board fills. Then the program prints the final board and updates the score.
+
+## Important C concepts used
+
+- **Constants:** `#define BOARD_SIZE 3` gives the board size a name.
+- **Arrays:** `char board[3][3]` stores the grid.
+- **Functions:** Each function handles one part of the game.
+- **Pointers:** `int *player_x_wins` lets `play_game` update the score variables declared in `main`. The `*` operator accesses the value at the pointer.
+- **Loops:** `while` repeats the game and input prompts; `for` visits board cells.
+- **Conditionals:** `if`, `else`, and `switch` make decisions.
+- **Input/output:** `printf` displays text and `scanf` reads the player’s input.
+- **Return values:** Functions return information, such as whether there is a winner or whether the board is full.
+
+One detail: the earlier code is shorter than exactly 200 lines; it contains the game features, but line count depends on formatting.
