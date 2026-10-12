@@ -1,0 +1,120 @@
+CREATE DATABASE IF NOT EXISTS college_management;
+USE college_management;
+
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS enrollments;
+DROP TABLE IF EXISTS courses;
+DROP TABLE IF EXISTS students;
+DROP TABLE IF EXISTS departments;
+
+CREATE TABLE departments (
+  department_id INT PRIMARY KEY,
+  department_name VARCHAR(100) NOT NULL UNIQUE,
+  office_location VARCHAR(100) NOT NULL,
+  phone VARCHAR(20)
+);
+CREATE TABLE students (
+  student_id INT PRIMARY KEY,
+  first_name VARCHAR(50) NOT NULL,
+  last_name VARCHAR(50) NOT NULL,
+  email VARCHAR(120) NOT NULL UNIQUE,
+  date_of_birth DATE NOT NULL,
+  department_id INT NOT NULL,
+  admission_year YEAR NOT NULL,
+  FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
+CREATE TABLE courses (
+  course_id INT PRIMARY KEY,
+  course_code VARCHAR(15) NOT NULL UNIQUE,
+  course_name VARCHAR(120) NOT NULL,
+  credits TINYINT UNSIGNED NOT NULL,
+  department_id INT NOT NULL,
+  FOREIGN KEY (department_id) REFERENCES departments(department_id),
+  CHECK (credits BETWEEN 1 AND 6)
+);
+CREATE TABLE enrollments (
+  enrollment_id INT PRIMARY KEY,
+  student_id INT NOT NULL,
+  course_id INT NOT NULL,
+  semester VARCHAR(20) NOT NULL,
+  academic_year VARCHAR(9) NOT NULL,
+  grade VARCHAR(2),
+  UNIQUE (student_id, course_id, semester, academic_year),
+  FOREIGN KEY (student_id) REFERENCES students(student_id),
+  FOREIGN KEY (course_id) REFERENCES courses(course_id)
+);
+CREATE TABLE payments (
+  payment_id INT PRIMARY KEY,
+  student_id INT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  payment_date DATE NOT NULL,
+  payment_method ENUM('Cash','Card','Bank Transfer','UPI') NOT NULL,
+  payment_status ENUM('Paid','Pending','Failed') NOT NULL DEFAULT 'Pending',
+  FOREIGN KEY (student_id) REFERENCES students(student_id),
+  CHECK (amount > 0)
+);
+
+INSERT INTO departments VALUES
+(1,'Computer Science','Block A - 201','011-4001001'),
+(2,'Business Administration','Block B - 105','011-4001002'),
+(3,'Physics','Science Block - 301','011-4001003'),
+(4,'Mathematics','Science Block - 212','011-4001004'),
+(5,'English','Arts Block - 110','011-4001005'),
+(6,'Electrical Engineering','Engineering Block - 401','011-4001006');
+
+INSERT INTO students VALUES
+(1001,'Aarav','Sharma','aarav.sharma@example.edu','2005-02-14',1,2023),
+(1002,'Mira','Patel','mira.patel@example.edu','2004-11-03',2,2022),
+(1003,'Kabir','Rao','kabir.rao@example.edu','2005-06-21',3,2023),
+(1004,'Anaya','Singh','anaya.singh@example.edu','2004-08-09',4,2022),
+(1005,'Ishaan','Das','ishaan.das@example.edu','2005-01-30',5,2023),
+(1006,'Zoya','Khan','zoya.khan@example.edu','2004-04-17',6,2022);
+
+INSERT INTO courses VALUES
+(201,'CS101','Introduction to Programming',4,1),
+(202,'BA110','Principles of Management',3,2),
+(203,'PHY120','Mechanics and Waves',4,3),
+(204,'MA130','Linear Algebra',3,4),
+(205,'ENG105','Academic Writing',2,5),
+(206,'EE140','Basic Circuit Theory',4,6);
+
+INSERT INTO enrollments VALUES
+(3001,1001,201,'Semester 1','2025-26','A'),
+(3002,1002,202,'Semester 1','2025-26','B+'),
+(3003,1003,203,'Semester 1','2025-26','A-'),
+(3004,1004,204,'Semester 1','2025-26','B'),
+(3005,1005,205,'Semester 1','2025-26','A'),
+(3006,1006,206,'Semester 1','2025-26','B+');
+
+INSERT INTO payments VALUES
+(4001,1001,25000.00,'2025-07-10','UPI','Paid'),
+(4002,1002,25000.00,'2025-07-11','Card','Paid'),
+(4003,1003,22000.00,'2025-07-12','Bank Transfer','Paid'),
+(4004,1004,22000.00,'2025-07-13','UPI','Pending'),
+(4005,1005,18000.00,'2025-07-14','Cash','Paid'),
+(4006,1006,28000.00,'2025-07-15','Bank Transfer','Paid');
+
+-- Example queries
+SELECT s.student_id, CONCAT(s.first_name,' ',s.last_name) AS student,
+       d.department_name
+FROM students s JOIN departments d USING (department_id)
+ORDER BY s.student_id;
+
+SELECT c.course_code, c.course_name, COUNT(e.student_id) AS enrolled_students
+FROM courses c LEFT JOIN enrollments e USING (course_id)
+GROUP BY c.course_id, c.course_code, c.course_name
+ORDER BY c.course_code;
+
+SELECT s.student_id, CONCAT(s.first_name,' ',s.last_name) AS student,
+       SUM(p.amount) AS total_paid
+FROM students s JOIN payments p USING (student_id)
+WHERE p.payment_status='Paid'
+GROUP BY s.student_id, student
+ORDER BY total_paid DESC;
+
+SELECT d.department_name, COUNT(s.student_id) AS student_count
+FROM departments d LEFT JOIN students s USING (department_id)
+GROUP BY d.department_id, d.department_name;
+
+SELECT semester, academic_year, grade, COUNT(*) AS grade_count
+FROM enrollments GROUP BY semester, academic_year, grade ORDER BY grade;
