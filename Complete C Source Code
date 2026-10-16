@@ -1,0 +1,223 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+    #include <conio.h>
+    #include <windows.h>
+    #define SLEEP_MS(ms) Sleep(ms)
+#else
+    #include <unistd.h>
+    #include <termios.h>
+    #include <fcntl.h>
+    #define SLEEP_MS(ms) usleep((ms) * 1000)
+
+    // Non-blocking keyboard hit for POSIX systems
+    int kbhit(void) {
+        struct termios oldt, newt;
+        int ch;
+        int oldf;
+
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+        fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+
+        ch = getchar();
+
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        fcntl(STDIN_FILENO, F_SETFL, oldf);
+
+        if (ch != EOF) {
+            ungetc(ch, stdin);
+            return 1;
+        }
+        return 0;
+    }
+
+    // Get character without waiting for Enter
+    int getch(void) {
+        struct termios oldt, newt;
+        int ch;
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        ch = getchar();
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        return ch;
+    }
+#endif
+
+#define WIDTH 20
+#define HEIGHT 15
+
+typedef enum { STOP = 0, LEFT, RIGHT, UP, DOWN } Direction;
+
+int gameOver;
+int x, y, fruitX, fruitY, score;
+int tailX[100], tailY[100];
+int nTail;
+Direction dir;
+
+void setup(void) {
+    gameOver = 0;
+    dir = STOP;
+    x = WIDTH / 2;
+    y = HEIGHT / 2;
+    fruitX = rand() % WIDTH;
+    fruitY = rand() % HEIGHT;
+    score = 0;
+    nTail = 0;
+}
+
+void draw(void) {
+    // Clear terminal screen
+    #if defined(_WIN32) || defined(_WIN64)
+        system("cls");
+    #else
+        printf("\033[H\033[J");
+    #endif
+
+    // Top border
+    for (int i = 0; i < WIDTH + 2; i++) {
+        printf("#");
+    }
+    printf("\n");
+
+    // Playfield
+    for (int i = 0; i < HEIGHT; i++) {
+        for (int j = 0; j < WIDTH; j++) {
+            if (j == 0) {
+                printf("#"); // Left border
+            }
+
+            if (i == y && j == x) {
+                printf("O"); // Snake head
+            } else if (i == fruitY && j == fruitX) {
+                printf("*"); // Fruit
+            } else {
+                int printTail = 0;
+                for (int k = 0; k < nTail; k++) {
+                    if (tailX[k] == j && tailY[k] == i) {
+                        printf("o"); // Snake body segment
+                        printTail = 1;
+                        break;
+                    }
+                }
+                if (!printTail) {
+                    printf(" ");
+                }
+            }
+
+            if (j == WIDTH - 1) {
+                printf("#"); // Right border
+            }
+        }
+        printf("\n");
+    }
+
+    // Bottom border
+    for (int i = 0; i < WIDTH + 2; i++) {
+        printf("#");
+    }
+    printf("\n");
+
+    printf("Score: %d  |  Controls: W (Up), A (Left), S (Down), D (Right), X (Exit)\n", score);
+}
+
+void input(void) {
+    if (kbhit()) {
+        char key = (char)getch();
+        switch (key) {
+            case 'a':
+            case 'A':
+                if (dir != RIGHT || nTail == 0) dir = LEFT;
+                break;
+            case 'd':
+            case 'D':
+                if (dir != LEFT || nTail == 0) dir = RIGHT;
+                break;
+            case 'w':
+            case 'W':
+                if (dir != DOWN || nTail == 0) dir = UP;
+                break;
+            case 's':
+            case 'S':
+                if (dir != UP || nTail == 0) dir = DOWN;
+                break;
+            case 'x':
+            case 'X':
+                gameOver = 1;
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void logic(void) {
+    if (dir == STOP) return;
+
+    // Shift tail positions forward
+    int prevX = tailX[0];
+    int prevY = tailY[0];
+    int prev2X, prev2Y;
+    tailX[0] = x;
+    tailY[0] = y;
+
+    for (int i = 1; i < nTail; i++) {
+        prev2X = tailX[i];
+        prev2Y = tailY[i];
+        tailX[i] = prevX;
+        tailY[i] = prevY;
+        prevX = prev2X;
+        prevY = prev2Y;
+    }
+
+    // Update head coordinates
+    switch (dir) {
+        case LEFT:  x--; break;
+        case RIGHT: x++; break;
+        case UP:    y--; break;
+        case DOWN:  y++; break;
+        default: break;
+    }
+
+    // Wall collision check
+    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+        gameOver = 1;
+    }
+
+    // Self-collision check
+    for (int i = 0; i < nTail; i++) {
+        if (tailX[i] == x && tailY[i] == y) {
+            gameOver = 1;
+        }
+    }
+
+    // Fruit pickup
+    if (x == fruitX && y == fruitY) {
+        score += 10;
+        nTail++;
+        fruitX = rand() % WIDTH;
+        fruitY = rand() % HEIGHT;
+    }
+}
+
+int main(void) {
+    srand((unsigned int)time(NULL));
+    setup();
+
+    while (!gameOver) {
+        draw();
+        input();
+        logic();
+        SLEEP_MS(100); // Game loop speed (100ms)
+    }
+
+    printf("\nGame Over! Final Score: %d\n", score);
+    return 0;
+}
