@@ -1,0 +1,523 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <time.h>
+
+/* ========================================================================== */
+/* Platform Abstraction Layer (Console, Input, and Precision Clock)          */
+/* ========================================================================== */
+
+#if defined(_WIN32) || defined(_WIN64)
+    #define PLATFORM_WINDOWS 1
+    #include <windows.h>
+    #include <conio.h>
+#else
+    #define PLATFORM_POSIX 1
+    #include <unistd.h>
+    #include <termios.h>
+    #include <sys/ioctl.h>
+    #include <sys/time.h>
+    #include <fcntl.h>
+#endif
+
+typedef struct {
+#if defined(PLATFORM_POSIX)
+    struct termios original_termios;
+    bool raw_mode_active;
+#elif defined(PLATFORM_WINDOWS)
+    HANDLE h_stdin;
+    HANDLE h_stdout;
+    DWORD original_in_mode;
+    DWORD original_out_mode;
+#endif
+} TerminalContext;
+
+static TerminalContext g_term_ctx;
+
+static void terminal_init(void) {
+#if defined(PLATFORM_POSIX)
+    tcgetattr(STDIN_FILENO, &g_term_ctx.original_termios);
+    struct termios raw = g_term_ctx.original_termios;
+    raw.c_lflag &= ~(ICANON | ECHO | IEXTEN | ISIG);
+    raw.c_iflag &= ~(IXON | ICRNL);
+    raw.c_cc[VMIN] = 0;
+    raw.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    g_term_ctx.raw_mode_active = true;
+
+    // Hide cursor & clear screen
+    printf("\033[?25l\033[2J");
+    fflush(stdout);
+#elif defined(PLATFORM_WINDOWS)
+    g_term_ctx.h_stdin = GetStdHandle(STD_INPUT_HANDLE);
+    g_term_ctx.h_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleMode(g_term_ctx.h_stdin, &g_term_ctx.original_in_mode);
+    GetConsoleMode(g_term_ctx.h_stdout, &g_term_ctx.original_out_mode);
+
+    DWORD in_mode = g_term_ctx.original_in_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+    DWORD out_mode = g_term_ctx.original_out_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(g_term_ctx.h_stdin, in_mode);
+    SetConsoleMode(g_term_ctx.h_stdout, out_mode);
+
+    CONSOLE_CURSOR_INFO cursor_info;
+    GetConsoleCursorInfo(g_term_ctx.h_stdout, &cursor_info);
+    cursor_info.bVisible = FALSE;
+    SetConsoleCursorInfo(g_term_ctx.h_stdout, &cursor_info);
+
+    printf("\033[2J");
+    fflush(stdout);
+#endif
+}
+
+static void terminal_restore(void) {
+#if defined(PLATFORM_POSIX)
+    if (g_term_ctx.raw_mode_active) {
+        printf("\033[?25h\033[0m\033[2J\033[H"); // Show cursor, reset colors
+        fflush(stdout);
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_term_ctx.original_termios);
+        g_term_ctx.raw_mode_active = false;
+    }
+#elif defined(PLATFORM_WINDOWS)
+    SetConsoleMode(g_term_ctx.h_stdin, g_term_ctx.original_in_mode);
+    SetConsoleMode(g_term_ctx.h_stdout, g_term_ctx.original_out_mode);
+    CONSOLE_CURSOR_INFO cursor_info;
+    GetConsoleCursorInfo(g_term_ctx.h_stdout, &cursor_info);
+    cursor_info.bVisible = TRUE;
+    SetConsoleCursorInfo(g_term_ctx.h_stdout, &cursor_info);
+    printf("\033[?25h\033[0m\033[2J\033[H");
+    fflush(stdout);
+#endif
+}
+
+static uint64_t clock_monotonic_ms(void) {
+#if defined(PLATFORM_POSIX)
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)(ts.tv_sec * 1000ULL + ts.tv_nsec / 1000000ULL);
+#elif defined(PLATFORM_WINDOWS)
+    static LARGE_INTEGER freq;
+    static bool init = false;
+    if (!init) {
+        QueryPerformanceFrequency(&freq);
+        init = true;
+    }
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (uint64_t)((counter.QuadPart * 1000ULL) / freq.QuadPart);
+#endif
+}
+
+static void sleep_ms(uint32_t ms) {
+#if defined(PLATFORM_POSIX)
+    usleep((useconds_t)ms * 1000);
+#elif defined(PLATFORM_WINDOWS)
+    Sleep(ms);
+#endif
+}
+
+static int read_key_input(void) {
+#if defined(PLATFORM_POSIX)
+    uint8_t c = 0;
+    ssize_t bytes_read = read(STDIN_FILENO, &c, 1);
+    if (bytes_read <= 0) return 0;
+
+    // Handle ANSI Escape sequences (Arrow keys: ESC [ A/B/C/D)
+    if (c == '\033') {
+        uint8_t seq[2];
+        if (read(STDIN_FILENO, &seq[0], 1) <= 0) return '\033';
+        if (read(STDIN_FILENO, &seq[1], 1) <= 0) return '\033';
+        if (seq[0] == '[') {
+            switch (seq[1]) {
+                case 'A': return 'W'; // Up
+                case 'B': return 'S'; // Down
+                case 'C': return 'D'; // Right
+                case 'D': return 'A'; // Left
+            }
+        }
+        return '\033';
+    }
+    return (int)c;
+#elif defined(PLATFORM_WINDOWS)
+    if (_kbhit()) {
+        int c = _getch();
+        if (c == 0 || c == 224) {
+            int ext = _getch();
+            switch (ext) {
+                case 72: return 'W'; // Up
+                case 80: return 'S'; // Down
+                case 77: return 'D'; // Right
+                case 75: return 'A'; // Left
+            }
+        }
+        return c;
+    }
+    return 0;
+#endif
+}
+
+/* ========================================================================== */
+/* Game Specifications and Constants                                         */
+/* ========================================================================== */
+
+#define ARENA_WIDTH       40
+#define ARENA_HEIGHT      20
+#define MAX_SNAKE_LENGTH  (ARENA_WIDTH * ARENA_HEIGHT)
+#define HIGHSCORE_FILE    "snake_highscore.dat"
+
+typedef enum {
+    DIR_NONE  = 0,
+    DIR_UP    = 1,
+    DIR_DOWN  = 2,
+    DIR_LEFT  = 3,
+    DIR_RIGHT = 4
+} Direction;
+
+typedef enum {
+    STATE_START_MENU = 0,
+    STATE_RUNNING,
+    STATE_PAUSED,
+    STATE_GAME_OVER
+} GameState;
+
+typedef enum {
+    MODE_CLASSIC_WALLS = 0,
+    MODE_WRAP_AROUND
+} GameMode;
+
+typedef enum {
+    FOOD_STANDARD = 0,
+    FOOD_GOLDEN,
+    FOOD_POISON,
+    FOOD_COUNT
+} FoodType;
+
+typedef struct {
+    int16_t x;
+    int16_t y;
+} Vec2i;
+
+typedef struct {
+    Vec2i pos;
+    FoodType type;
+    int32_t lifetime_ticks;
+    bool active;
+} FoodItem;
+
+typedef struct {
+    Vec2i body[MAX_SNAKE_LENGTH];
+    int32_t length;
+    Direction dir;
+    Direction pending_dir;
+    bool alive;
+} Snake;
+
+typedef struct {
+    Snake snake;
+    FoodItem food;
+    GameState state;
+    GameMode mode;
+    uint32_t score;
+    uint32_t high_score;
+    uint32_t speed_ms;
+    uint32_t base_speed_ms;
+    uint64_t last_tick_time;
+    uint32_t golden_eaten;
+} EngineContext;
+
+/* Double-buffer screen matrix to avoid flickering */
+static char g_front_buffer[ARENA_HEIGHT + 2][ARENA_WIDTH + 3];
+static char g_back_buffer[ARENA_HEIGHT + 2][ARENA_WIDTH + 3];
+
+/* ========================================================================== */
+/* High Score File Handling                                                   */
+/* ========================================================================== */
+
+static uint32_t load_high_score(void) {
+    FILE *fp = fopen(HIGHSCORE_FILE, "rb");
+    if (!fp) return 0;
+    uint32_t score = 0;
+    if (fread(&score, sizeof(uint32_t), 1, fp) != 1) score = 0;
+    fclose(fp);
+    return score;
+}
+
+static void save_high_score(uint32_t score) {
+    FILE *fp = fopen(HIGHSCORE_FILE, "wb");
+    if (!fp) return;
+    fwrite(&score, sizeof(uint32_t), 1, fp);
+    fclose(fp);
+}
+
+/* ========================================================================== */
+/* Core Game Logic                                                            */
+/* ========================================================================== */
+
+static bool is_position_occupied_by_snake(const Snake *snake, Vec2i pt) {
+    for (int32_t i = 0; i < snake->length; ++i) {
+        if (snake->body[i].x == pt.x && snake->body[i].y == pt.y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void spawn_food(EngineContext *engine) {
+    Vec2i pt;
+    bool valid = false;
+    int attempts = 0;
+
+    while (!valid && attempts < 1000) {
+        pt.x = (rand() % ARENA_WIDTH);
+        pt.y = (rand() % ARENA_HEIGHT);
+        if (!is_position_occupied_by_snake(&engine->snake, pt)) {
+            valid = true;
+        }
+        attempts++;
+    }
+
+    engine->food.pos = pt;
+    engine->food.active = true;
+
+    // 15% Golden Food, 10% Poison Food, 75% Standard
+    int roll = rand() % 100;
+    if (roll < 15) {
+        engine->food.type = FOOD_GOLDEN;
+        engine->food.lifetime_ticks = 40; // Decays over time
+    } else if (roll < 25) {
+        engine->food.type = FOOD_POISON;
+        engine->food.lifetime_ticks = 60;
+    } else {
+        engine->food.type = FOOD_STANDARD;
+        engine->food.lifetime_ticks = -1; // Permanent
+    }
+}
+
+static void engine_init(EngineContext *engine) {
+    memset(engine, 0, sizeof(EngineContext));
+
+    engine->high_score = load_high_score();
+    engine->state = STATE_START_MENU;
+    engine->mode = MODE_CLASSIC_WALLS;
+    engine->base_speed_ms = 110;
+    engine->speed_ms = engine->base_speed_ms;
+
+    // Reset Snake to Center
+    engine->snake.length = 3;
+    engine->snake.dir = DIR_RIGHT;
+    engine->snake.pending_dir = DIR_RIGHT;
+    engine->snake.alive = true;
+
+    int mid_x = ARENA_WIDTH / 2;
+    int mid_y = ARENA_HEIGHT / 2;
+
+    for (int i = 0; i < engine->snake.length; ++i) {
+        engine->snake.body[i].x = mid_x - i;
+        engine->snake.body[i].y = mid_y;
+    }
+
+    spawn_food(engine);
+    engine->last_tick_time = clock_monotonic_ms();
+
+    memset(g_front_buffer, 0, sizeof(g_front_buffer));
+    memset(g_back_buffer, 0, sizeof(g_back_buffer));
+}
+
+static void engine_reset_match(EngineContext *engine) {
+    engine->score = 0;
+    engine->golden_eaten = 0;
+    engine->speed_ms = engine->base_speed_ms;
+    engine->snake.length = 3;
+    engine->snake.dir = DIR_RIGHT;
+    engine->snake.pending_dir = DIR_RIGHT;
+    engine->snake.alive = true;
+
+    int mid_x = ARENA_WIDTH / 2;
+    int mid_y = ARENA_HEIGHT / 2;
+
+    for (int i = 0; i < engine->snake.length; ++i) {
+        engine->snake.body[i].x = mid_x - i;
+        engine->snake.body[i].y = mid_y;
+    }
+
+    spawn_food(engine);
+    engine->state = STATE_RUNNING;
+}
+
+static void handle_input(EngineContext *engine, int key) {
+    if (key == 0) return;
+
+    // Normalize lowercase
+    if (key >= 'a' && key <= 'z') {
+        key -= ('a' - 'A');
+    }
+
+    if (key == 'Q' || key == 27) { // Q or ESC to quit
+        terminal_restore();
+        printf("Exiting game. Thanks for playing!\n");
+        exit(0);
+    }
+
+    switch (engine->state) {
+        case STATE_START_MENU:
+            if (key == ' ' || key == '\n' || key == '\r') {
+                engine_reset_match(engine);
+            } else if (key == 'M') {
+                engine->mode = (engine->mode == MODE_CLASSIC_WALLS) ? MODE_WRAP_AROUND : MODE_CLASSIC_WALLS;
+            }
+            break;
+
+        case STATE_RUNNING:
+            if (key == 'P') {
+                engine->state = STATE_PAUSED;
+                break;
+            }
+            // Directional dispatch (prevent 180° immediate self-inversion)
+            if ((key == 'W') && (engine->snake.dir != DIR_DOWN)) {
+                engine->snake.pending_dir = DIR_UP;
+            } else if ((key == 'S') && (engine->snake.dir != DIR_UP)) {
+                engine->snake.pending_dir = DIR_DOWN;
+            } else if ((key == 'A') && (engine->snake.dir != DIR_RIGHT)) {
+                engine->snake.pending_dir = DIR_LEFT;
+            } else if ((key == 'D') && (engine->snake.dir != DIR_LEFT)) {
+                engine->snake.pending_dir = DIR_RIGHT;
+            }
+            break;
+
+        case STATE_PAUSED:
+            if (key == 'P' || key == ' ') {
+                engine->state = STATE_RUNNING;
+            }
+            break;
+
+        case STATE_GAME_OVER:
+            if (key == ' ' || key == '\n' || key == '\r') {
+                engine_reset_match(engine);
+            }
+            break;
+    }
+}
+
+static void update_physics(EngineContext *engine) {
+    if (engine->state != STATE_RUNNING) return;
+
+    Snake *snake = &engine->snake;
+    snake->dir = snake->pending_dir;
+
+    Vec2i next_head = snake->body[0];
+    switch (snake->dir) {
+        case DIR_UP:    next_head.y -= 1; break;
+        case DIR_DOWN:  next_head.y += 1; break;
+        case DIR_LEFT:  next_head.x -= 1; break;
+        case DIR_RIGHT: next_head.x += 1; break;
+        default: break;
+    }
+
+    // Boundary rules
+    if (engine->mode == MODE_WRAP_AROUND) {
+        if (next_head.x < 0) next_head.x = ARENA_WIDTH - 1;
+        else if (next_head.x >= ARENA_WIDTH) next_head.x = 0;
+        if (next_head.y < 0) next_head.y = ARENA_HEIGHT - 1;
+        else if (next_head.y >= ARENA_HEIGHT) next_head.y = 0;
+    } else {
+        if (next_head.x < 0 || next_head.x >= ARENA_WIDTH ||
+            next_head.y < 0 || next_head.y >= ARENA_HEIGHT) {
+            snake->alive = false;
+            engine->state = STATE_GAME_OVER;
+            if (engine->score > engine->high_score) {
+                engine->high_score = engine->score;
+                save_high_score(engine->high_score);
+            }
+            return;
+        }
+    }
+
+    // Self-collision (skipping tail tip since it vacates this tick unless growing)
+    for (int32_t i = 0; i < snake->length - 1; ++i) {
+        if (snake->body[i].x == next_head.x && snake->body[i].y == next_head.y) {
+            snake->alive = false;
+            engine->state = STATE_GAME_OVER;
+            if (engine->score > engine->high_score) {
+                engine->high_score = engine->score;
+                save_high_score(engine->high_score);
+            }
+            return;
+        }
+    }
+
+    // Food Consumption Detection
+    bool grew = false;
+    if (engine->food.active && next_head.x == engine->food.pos.x && next_head.y == engine->food.pos.y) {
+        switch (engine->food.type) {
+            case FOOD_STANDARD:
+                engine->score += 10;
+                grew = true;
+                break;
+            case FOOD_GOLDEN:
+                engine->score += 35;
+                engine->golden_eaten++;
+                grew = true;
+                break;
+            case FOOD_POISON:
+                if (engine->score >= 15) engine->score -= 15;
+                else engine->score = 0;
+                if (snake->length > 2) {
+                    snake->length--; // Shrink
+                }
+                break;
+            default: break;
+        }
+
+        // Adjust speed based on growth
+        if (engine->speed_ms > 45) {
+            engine->speed_ms = engine->base_speed_ms - (snake->length * 2);
+            if (engine->speed_ms < 45) engine->speed_ms = 45;
+        }
+
+        spawn_food(engine);
+    }
+
+    // Food Decaying
+    if (engine->food.lifetime_ticks > 0) {
+        engine->food.lifetime_ticks--;
+        if (engine->food.lifetime_ticks == 0) {
+            spawn_food(engine);
+        }
+    }
+
+    // Shift body segments forward
+    if (grew) {
+        if (snake->length < MAX_SNAKE_LENGTH) {
+            snake->length++;
+        }
+    }
+    for (int32_t i = snake->length - 1; i > 0; --i) {
+        snake->body[i] = snake->body[i - 1];
+    }
+    snake->body[0] = next_head;
+}
+
+/* ========================================================================== */
+/* Double-Buffered Renderer (Flicker-Free Terminal Rendering)                 */
+/* ========================================================================== */
+
+static void render_scene(const EngineContext *engine) {
+    // Stage the border and arena spaces
+    for (int y = 0; y < ARENA_HEIGHT + 2; ++y) {
+        for (int x = 0; x < ARENA_WIDTH + 2; ++x) {
+            if (y == 0 || y == ARENA_HEIGHT + 1) {
+                g_back_buffer[y][x] = '#';
+            } else if (x == 0 || x == ARENA_WIDTH + 1) {
+                g_back_buffer[y][x] = '#';
+            } else {
+                g_back_buffer[y][x] = ' ';
+            }
+        }
+        g_back_buffer[y][ARENA_WIDTH + 2] = '\0';
+    }
+
+    // Draw Food
+    if (engine->food.active) {
+        int fx = engine->food.pos.x + 1;
+        int fy = engine->food.pos.y + 1
