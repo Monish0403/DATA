@@ -1,0 +1,345 @@
+Here is a complete, production-ready backend implementation using **Node.js, Express, and SQLite** (via `better-sqlite3`, requiring zero external database setup).
+
+It tracks:
+
+1. **Per-user counts:** Total logins, total logouts, and current active status.
+2. **Global aggregate counters:** Total system logins and logouts.
+3. **Audit log (history):** Exact timestamps and IP addresses for every event.
+
+---
+
+### 1. Project Setup
+
+Create a new directory and install dependencies:
+
+```bash
+mkdir auth-tracker && cd auth-tracker
+npm init -y
+npm install express better-sqlite3 jsonwebtoken bcryptjs cors
+
+```
+
+---
+
+### 2. Complete Backend Code (`server.js`)
+
+Save this file as `server.js`:
+
+```javascript
+const express = require('express');
+const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+
+const app = express();
+const PORT = 3000;
+const JWT_SECRET = 'your-super-secret-key-change-in-production';
+
+app.use(express.json());
+app.use(cors());
+
+// ==========================================
+// Database Setup & Schema
+// ==========================================
+const db = new Database('auth_system.db');
+
+// Enable WAL mode for high concurrent performance
+db.pragma('journal_mode = WAL');
+
+// 1. Users table (Stores credentials & aggregate user counters)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    login_count INTEGER DEFAULT 0,
+    logout_count INTEGER DEFAULT 0,
+    is_logged_in INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS auth_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    action TEXT CHECK(action IN ('LOGIN', 'LOGOUT')) NOT NULL,
+    ip_address TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS token_denylist (
+    token TEXT PRIMARY KEY,
+    invalidated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Prepared Statements for Performance
+const stmtInsertUser = db.prepare(`INSERT INTO users (username, password_hash) VALUES (?, ?)`);
+const stmtFindUser = db.prepare(`SELECT * FROM users WHERE username = ?`);
+const stmtFindUserById = db.prepare(`SELECT id, username, login_count, logout_count, is_logged_in FROM users WHERE id = ?`);
+const stmtRecordLogin = db.prepare(`UPDATE users SET login_count = login_count + 1, is_logged_in = 1 WHERE id = ?`);
+const stmtRecordLogout = db.prepare(`UPDATE users SET logout_count = logout_count + 1, is_logged_in = 0 WHERE id = ?`);
+const stmtInsertLog = db.prepare(`INSERT INTO auth_logs (user_id, action, ip_address) VALUES (?, ?, ?)`);
+const stmtDenyToken = db.prepare(`INSERT INTO token_denylist (token) VALUES (?)`);
+const stmtIsTokenDenied = db.prepare(`SELECT 1 FROM token_denylist WHERE token = ?`);
+
+// ==========================================
+// Middleware: JWT Authentication
+// ==========================================
+function authenticate(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  // Check if token has been invalidated by logout
+  const isRevoked = stmtIsTokenDenied.get(token);
+  if (isRevoked) {
+    return res.status(401).json({ error: 'Token has been invalidated via logout' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = decoded;
+    req.rawToken = token;
+    next();
+  });
+}
+
+// ==========================================
+// Routes
+// ==========================================
+
+// Register a new user
+app.post('/api/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const result = stmtInsertUser.run(username, hash);
+    res.status(201).json({ message: 'User registered successfully', userId: result.lastInsertRowid });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Username already taken' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Login: Verifies credentials, increments login count, logs event
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  const user = stmtFindUser.get(username);
+  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+
+  // Execute counter update and log insertion inside a single transaction
+  const performLogin = db.transaction((userId) => {
+    stmtRecordLogin.run(userId);
+    stmtInsertLog.run(userId, 'LOGIN', clientIp);
+  });
+  performLogin(user.id);
+
+  // Issue token
+  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '12h' });
+
+  // Get updated user status
+  const updatedUser = stmtFindUserById.get(user.id);
+
+  res.json({
+    message: 'Login successful',
+    token,
+    user: {
+      username: updatedUser.username,
+      loginCount: updatedUser.login_count,
+      logoutCount: updatedUser.logout_count,
+      isLoggedIn: Boolean(updatedUser.is_logged_in)
+    }
+  });
+});
+
+// Logout: Invalidates token, increments logout count, logs event
+app.post('/api/logout', authenticate, (req, res) => {
+  const userId = req.user.id;
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  // Execute database updates inside a transaction
+  const performLogout = db.transaction(() => {
+    stmtRecordLogout.run(userId);
+    stmtInsertLog.run(userId, 'LOGOUT', clientIp);
+    stmtDenyToken.run(req.rawToken);
+  });
+  performLogout();
+
+  const updatedUser = stmtFindUserById.get(userId);
+
+  res.json({
+    message: 'Logout successful',
+    user: {
+      username: updatedUser.username,
+      loginCount: updatedUser.login_count,
+      logoutCount: updatedUser.logout_count,
+      isLoggedIn: Boolean(updatedUser.is_logged_in)
+    }
+  });
+});
+
+// User Profile: Get active session counters
+app.get('/api/me', authenticate, (req, res) => {
+  const user = stmtFindUserById.get(req.user.id);
+  res.json(user);
+});
+
+// Admin / Dashboard Analytics: Global metrics and audit logs
+app.get('/api/stats', (req, res) => {
+  const globalCounts = db.prepare(`
+    SELECT 
+      SUM(login_count) AS total_system_logins,
+      SUM(logout_count) AS total_system_logouts,
+      SUM(is_logged_in) AS total_active_sessions,
+      COUNT(id) AS registered_users
+    FROM users
+  `).get();
+
+  const recentLogs = db.prepare(`
+    SELECT 
+      l.id, 
+      u.username, 
+      l.action, 
+      l.ip_address, 
+      l.timestamp 
+    FROM auth_logs l
+    JOIN users u ON l.user_id = u.id
+    ORDER BY l.timestamp DESC 
+    LIMIT 20
+  `).all();
+
+  res.json({
+    summary: globalCounts,
+    recentActivity: recentLogs
+  });
+});
+
+// Start Server
+app.listen(PORT, () => {
+  console.log(`Server listening on http://localhost:${PORT}`);
+});
+
+```
+
+---
+
+### 3. How to Test with `curl`
+
+#### 1. Register a user
+
+```bash
+curl -X POST http://localhost:3000/api/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "password": "securepassword123"}'
+
+```
+
+#### 2. Log In (Increments `login_count`)
+
+```bash
+curl -X POST http://localhost:3000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "password": "securepassword123"}'
+
+```
+
+*Output:*
+
+```json
+{
+  "message": "Login successful",
+  "token": "eyJhbGciOi...",
+  "user": {
+    "username": "alice",
+    "loginCount": 1,
+    "logoutCount": 0,
+    "isLoggedIn": true
+  }
+}
+
+```
+
+#### 3. Log Out (Increments `logout_count` & Revokes Token)
+
+*(Replace `<TOKEN>` with the token from step 2)*
+
+```bash
+curl -X POST http://localhost:3000/api/logout \
+  -H "Authorization: Bearer <TOKEN>"
+
+```
+
+*Output:*
+
+```json
+{
+  "message": "Logout successful",
+  "user": {
+    "username": "alice",
+    "loginCount": 1,
+    "logoutCount": 1,
+    "isLoggedIn": false
+  }
+}
+
+```
+
+#### 4. View System-Wide Analytics
+
+```bash
+curl http://localhost:3000/api/stats
+
+```
+
+*Output:*
+
+```json
+{
+  "summary": {
+    "total_system_logins": 1,
+    "total_system_logouts": 1,
+    "total_active_sessions": 0,
+    "registered_users": 1
+  },
+  "recentActivity": [
+    {
+      "id": 2,
+      "username": "alice",
+      "action": "LOGOUT",
+      "ip_address": "::1",
+      "timestamp": "2026-10-16 04:40:12"
+    },
+    {
+      "id": 1,
+      "username": "alice",
+      "action": "LOGIN",
+      "ip_address": "::1",
+      "timestamp": "2026-10-16 04:39:55"
+    }
+  ]
+}
+
+```
+
+---
+
+### Key Production Practices Used
+
+1. **Transactional Integrity (`db.transaction`)**: Updating counters and logging audit entries happen atomically; if one fails, the other rolls back.
+2. **Server-Side Token Denylist**: Standard JWTs remain valid until expiration even after logout. Storing logged-out tokens in `token_denylist` ensures that logging out actually invalidates the token immediately.
+3. **Audit Trail vs Aggregate Counters**: Fast queries use the integer columns in `users` (`login_count`, `logout_count`), while detailed forensics are preserved separately in `auth_logs`.
