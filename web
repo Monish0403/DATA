@@ -1,0 +1,414 @@
+
+
+### 1. MySQL Database Schema (`schema.sql`)
+
+Run this in your MySQL console or phpMyAdmin:
+
+```sql
+CREATE DATABASE IF NOT EXISTS ludo_game;
+USE ludo_game;
+
+-- Store player profiles
+CREATE TABLE IF NOT EXISTS players (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    color_preference ENUM('red', 'green', 'yellow', 'blue') DEFAULT 'red',
+    games_played INT DEFAULT 0,
+    games_won INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Store game sessions
+CREATE TABLE IF NOT EXISTS game_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    room_code VARCHAR(10) NOT NULL UNIQUE,
+    current_turn VARCHAR(20) DEFAULT 'red',
+    status ENUM('waiting', 'in_progress', 'finished') DEFAULT 'waiting',
+    winner_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (winner_id) REFERENCES players(id) ON DELETE SET NULL
+);
+
+-- Store individual moves/scores
+CREATE TABLE IF NOT EXISTS game_moves (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    game_id INT NOT NULL,
+    player_id INT NOT NULL,
+    dice_roll TINYINT NOT NULL,
+    piece_id VARCHAR(10),
+    to_position INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (game_id) REFERENCES game_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+
+```
+
+---
+
+### 2. Frontend: HTML (`index.html`)
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ludo Champion - Game & Player Hub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <h1>🎲 Ludo Game Portal</h1>
+    <p>Play Ludo and synchronize match statistics to MySQL</p>
+  </header>
+
+  <main class="container">
+    <!-- Left: Ludo Board UI -->
+    <section class="game-view">
+      <div class="ludo-board">
+        <!-- Corner Bases -->
+        <div class="base red-base">
+          <div class="base-inner">
+            <span class="token red-token"></span>
+            <span class="token red-token"></span>
+            <span class="token red-token"></span>
+            <span class="token red-token"></span>
+          </div>
+        </div>
+
+        <div class="base green-base">
+          <div class="base-inner">
+            <span class="token green-token"></span>
+            <span class="token green-token"></span>
+            <span class="token green-token"></span>
+            <span class="token green-token"></span>
+          </div>
+        </div>
+
+        <div class="base blue-base">
+          <div class="base-inner">
+            <span class="token blue-token"></span>
+            <span class="token blue-token"></span>
+            <span class="token blue-token"></span>
+            <span class="token blue-token"></span>
+          </div>
+        </div>
+
+        <div class="base yellow-base">
+          <div class="base-inner">
+            <span class="token yellow-token"></span>
+            <span class="token yellow-token"></span>
+            <span class="token yellow-token"></span>
+            <span class="token yellow-token"></span>
+          </div>
+        </div>
+
+        <!-- Center Home Triangle Area -->
+        <div class="center-home">
+          <span class="home-text">HOME</span>
+        </div>
+      </div>
+
+      <!-- Dice & Play Actions -->
+      <div class="controls-card">
+        <div class="dice-display">🎲 <span>6</span></div>
+        <button class="btn btn-primary" type="button">Roll Dice</button>
+      </div>
+    </section>
+
+    <!-- Right: Database Registration & Match Save Form -->
+    <section class="db-panel">
+      <h2>Save Match / Player to MySQL</h2>
+      <form action="save_game.php" method="POST" class="game-form">
+        <div class="form-group">
+          <label for="username">Player Name:</label>
+          <input type="text" id="username" name="username" placeholder="e.g. Alex" required>
+        </div>
+
+        <div class="form-group">
+          <label for="color">Selected Color:</label>
+          <select id="color" name="color">
+            <option value="red">Red</option>
+            <option value="green">Green</option>
+            <option value="yellow">Yellow</option>
+            <option value="blue">Blue</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="room_code">Room Code:</label>
+          <input type="text" id="room_code" name="room_code" placeholder="e.g. ROOM-101" required>
+        </div>
+
+        <div class="form-group">
+          <label for="dice_roll">Last Dice Roll:</label>
+          <input type="number" id="dice_roll" name="dice_roll" min="1" max="6" value="6" required>
+        </div>
+
+        <button type="submit" class="btn btn-success">Save Record to Database</button>
+      </form>
+    </section>
+  </main>
+
+</body>
+</html>
+
+```
+
+---
+
+### 3. Styling: CSS (`style.css`)
+
+```css
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background: #0f172a;
+  color: #f8fafc;
+  min-height: 100vh;
+  padding: 24px 16px;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  color: #38bdf8;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Ludo Board Styling */
+.game-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.ludo-board {
+  width: 420px;
+  height: 420px;
+  background: #ffffff;
+  border: 6px solid #1e293b;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  grid-template-rows: repeat(15, 1fr);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+}
+
+.base {
+  position: absolute;
+  width: 40%;
+  height: 40%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 2px solid #000;
+}
+
+.red-base { top: 0; left: 0; background-color: #ef4444; }
+.green-base { top: 0; right: 0; background-color: #22c55e; }
+.blue-base { bottom: 0; left: 0; background-color: #3b82f6; }
+.yellow-base { bottom: 0; right: 0; background-color: #eab308; }
+
+.base-inner {
+  width: 70%;
+  height: 70%;
+  background: white;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  place-items: center;
+  padding: 8px;
+}
+
+.token {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #1e293b;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.red-token { background: #ef4444; }
+.green-token { background: #22c55e; }
+.blue-token { background: #3b82f6; }
+.yellow-token { background: #eab308; }
+
+.center-home {
+  position: absolute;
+  top: 40%;
+  left: 40%;
+  width: 20%;
+  height: 20%;
+  background: #f1f5f9;
+  border: 2px solid #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.home-text {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+/* Controls */
+.controls-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #1e293b;
+  padding: 12px 24px;
+  border-radius: 12px;
+}
+
+.dice-display {
+  font-size: 1.8rem;
+  font-weight: bold;
+}
+
+/* Form & Database Panel */
+.db-panel {
+  flex: 1;
+  min-width: 300px;
+  max-width: 450px;
+  background: #1e293b;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #334155;
+}
+
+.db-panel h2 {
+  font-size: 1.25rem;
+  margin-bottom: 1.25rem;
+  color: #38bdf8;
+}
+
+.game-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.form-group input,
+.form-group select {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #38bdf8;
+}
+
+.btn {
+  padding: 10px 18px;
+  border-radius: 6px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn-primary { background: #38bdf8; color: #0f172a; }
+.btn-success { background: #22c55e; color: #0f172a; }
+
+```
+
+---
+
+### 4. Backend Handler: PHP (`save_game.php`)
+
+This file receives the submitted form and inserts the record into MySQL:
+
+```php
+<?php
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db   = "ludo_game";
+
+$conn = new mysqli($host, $user, $pass, $db);
+
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $username = trim($_POST['username']);
+    $color    = trim($_POST['color']);
+    $room     = trim($_POST['room_code']);
+    $dice     = (int)$_POST['dice_roll'];
+
+    // 1. Insert or get player
+    $stmt = $conn->prepare("INSERT INTO players (username, color_preference, games_played) 
+                            VALUES (?, ?, 1) 
+                            ON DUPLICATE KEY UPDATE games_played = games_played + 1");
+    $stmt->bind_param("ss", $username, $color);
+    $stmt->execute();
+    $playerId = $stmt->insert_id ?: $conn->query("SELECT id FROM players WHERE username='$username'")->fetch_assoc()['id'];
+
+    // 2. Insert or update game room
+    $stmt = $conn->prepare("INSERT INTO game_sessions (room_code, current_turn, status) 
+                            VALUES (?, ?, 'in_progress') 
+                            ON DUPLICATE KEY UPDATE current_turn = ?");
+    $stmt->bind_param("sss", $room, $color, $color);
+    $stmt->execute();
+    $gameId = $stmt->insert_id ?: $conn->query("SELECT id FROM game_sessions WHERE room_code='$room'")->fetch_assoc()['id'];
+
+    // 3. Save the move
+    $stmt = $conn->prepare("INSERT INTO game_moves (game_id, player_id, dice_roll) VALUES (?, ?, ?)");
+    $stmt->bind_param("iii", $gameId, $playerId, $dice);
+    
+    if ($stmt->execute()) {
+        echo "<script>alert('Move and player saved to MySQL!'); window.location.href='index.html';</script>";
+    } else {
+        echo "Error saving data: " . $stmt->error;
+    }
+
+    $stmt->close();
+}
+$conn->c
